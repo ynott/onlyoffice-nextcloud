@@ -52,6 +52,7 @@ use OCA\Files_Versions\Versions\IVersionManager;
 use OCA\Onlyoffice\AppConfig;
 use OCA\Onlyoffice\Crypt;
 use OCA\Onlyoffice\DocumentService;
+use OCA\Onlyoffice\FileVersions;
 
 /**
  * Callback handler for the document server.
@@ -206,7 +207,8 @@ class CallbackController extends Controller {
 
         $fileId = $hashData->fileId;
         $version = isset($hashData->version) ? $hashData->version : null;
-        $this->logger->debug("Download: $fileId" . (empty($version) ? "" : " (" . $version . ")"), ["app" => $this->appName]);
+        $changes = isset($hashData->changes) ? $hashData->changes : false;
+        $this->logger->debug("Download: $fileId ($version)" . ($changes ? " changes" : ""), ["app" => $this->appName]);
 
         if (!$this->userSession->isLoggedIn()) {
             if (!empty($this->config->GetDocumentServerSecret())) {
@@ -242,7 +244,7 @@ class CallbackController extends Controller {
         }
 
         $shareToken = isset($hashData->shareToken) ? $hashData->shareToken : null;
-        list ($file, $error) = empty($shareToken) ? $this->getFile($userId, $fileId, null, $version) : $this->getFileByToken($fileId, $shareToken, $version);
+        list ($file, $error) = empty($shareToken) ? $this->getFile($userId, $fileId, null, $changes ? null : $version) : $this->getFileByToken($fileId, $shareToken, $changes ? null : $version);
 
         if (isset($error)) {
             return $error;
@@ -251,6 +253,23 @@ class CallbackController extends Controller {
         if ($this->userSession->isLoggedIn() && !$file->isReadable()) {
             $this->logger->error("Download without access right", ["app" => $this->appName]);
             return new JSONResponse(["message" => $this->trans->t("Access denied")], Http::STATUS_FORBIDDEN);
+        }
+
+        if ($changes) {
+            if ($this->versionManager === null) {
+                $this->logger->error("Download changes: versionManager is null", ["app" => $this->appName]);
+                return new JSONResponse(["message" => $this->trans->t("Invalid request")], Http::STATUS_BAD_REQUEST);
+            }
+
+            $changes = FileVersions::getChangesFile($this->versionManager, $file, $version);
+            if ($changes === null) {
+                $this->logger->error("Download: changes $fileId ($version) was not found", ["app" => $this->appName]);
+                return new JSONResponse(["message" => $this->trans->t("Files not found")], Http::STATUS_NOT_FOUND);
+            }
+
+            $this->logger->debug("Download changes " . $changes->getName(), ["app" => $this->appName]);
+
+            $file = $changes;
         }
 
         try {
@@ -330,6 +349,8 @@ class CallbackController extends Controller {
      * @param integer $status - the edited status
      * @param string $url - the link to the edited document to be saved
      * @param string $token - request signature
+     * @param array $history - file history
+     * @param string $changesurl - link to file changes
      *
      * @return array
      *
@@ -338,7 +359,7 @@ class CallbackController extends Controller {
      * @PublicPage
      * @CORS
      */
-    public function track($doc, $users, $key, $status, $url, $token) {
+    public function track($doc, $users, $key, $status, $url, $token, $history, $changesurl) {
 
         list ($hashData, $error) = $this->crypt->ReadHash($doc);
         if ($hashData === null) {
@@ -466,9 +487,11 @@ class CallbackController extends Controller {
                         return $file->putContent($newData);
                     });
 
+                    FileVersions::saveHistory($documentService, $file->getFileInfo(), $history, $changesurl);
+
                     $result = 0;
                 } catch (\Exception $e) {
-                    $this->logger->logException($e, ["message" => "Track $trackerStatus error", "app" => $this->appName]);
+                    $this->logger->logException($e, ["message" => "Track: $fileId status $trackerStatus error", "app" => $this->appName]);
                 }
                 break;
 
