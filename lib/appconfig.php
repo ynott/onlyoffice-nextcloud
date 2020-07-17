@@ -446,6 +446,10 @@ class AppConfig {
      * @return string
      */
     public function ReplaceDocumentServerUrlToInternal($url) {
+        if (empty($url)) {
+            return $url;
+        }
+
         $documentServerUrl = $this->GetDocumentServerInternalUrl();
         if (!empty($documentServerUrl)) {
             $from = $this->GetDocumentServerUrl();
