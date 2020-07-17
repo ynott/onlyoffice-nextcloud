@@ -250,4 +250,39 @@ class FileVersions {
             $logger->logException($e, ["message" => "Track: save $fileId history error", "app" => self::$appName]);
         }
     }
+
+    /**
+     * Delete all versions of file
+     *
+     * @param string $ownerId - file owner id
+     * @param string $fileId - file id
+     */
+    public static function deleteAllVersions($ownerId, $fileId) {
+        $logger = \OC::$server->getLogger();
+
+        $logger->debug("deleteAllVersions $ownerId $fileId", ["app" => self::$appName]);
+
+        if ($ownerId === null || $fileId === null) {
+            return;
+        }
+
+        $appData = \OC::$server->getAppDataDir(self::$appName);
+        $folderHistory = null;
+        try {
+            $folderHistory = $appData->getFolder($ownerId);
+        } catch (NotFoundException $e) {
+            return;
+        }
+
+        $storedFiles = $folderHistory->getDirectoryListing();
+        foreach ($storedFiles as $storedFile) {
+            $storedFileName = $storedFile->getName();
+            if (strpos($storedFileName, "history_" . $fileId . "_") === 0
+                || strpos($storedFileName, "changes_" . $fileId . "_") === 0) {
+                $storedFile->delete();
+
+                $logger->debug("deleteAllVersions $storedFileName", ["app" => self::$appName]);
+            }
+        }
+    }
 }
