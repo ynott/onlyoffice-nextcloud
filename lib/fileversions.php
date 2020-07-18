@@ -78,10 +78,11 @@ class FileVersions {
      * @param string $ownerId - file owner id
      * @param string $fileId - file id
      * @param string $versionId - file version
+     * @param string $prevVersion - previous version for check
      *
      * @return array
      */
-    public static function getHistoryData($ownerId, $fileId, $versionId) {
+    public static function getHistoryData($ownerId, $fileId, $versionId, $prevVersion) {
         $logger = \OC::$server->getLogger();
 
         if ($ownerId === null) {
@@ -106,6 +107,11 @@ class FileVersions {
             $historyFile = $folderHistory->getFile($historyName);
             $historyDataString = $historyFile->getContent();
             $historyData = json_decode($historyDataString, true);
+
+            if ($historyData["prev"] !== $prevVersion) {
+                $logger->debug("History: prev $prevVersion != " . $historyData["prev"], ["app" => self::$appName]);
+                return null;
+            }
 
             return $historyData;
         } catch (\Exception $e) {
@@ -192,8 +198,9 @@ class FileVersions {
      * @param OCP\Files\FileInfo $fileInfo - file info
      * @param array $history - file history
      * @param string $changesurl - link to file changes
+     * @param string $prevVersion - previous version for check
      */
-    public static function saveHistory($documentService, $fileInfo, $history, $changesurl) {
+    public static function saveHistory($documentService, $fileInfo, $history, $changesurl, $prevVersion) {
         $logger = \OC::$server->getLogger();
 
         $owner = $fileInfo->getOwner();
@@ -223,6 +230,7 @@ class FileVersions {
             $changesFile = $folderHistory->newFile($changesName);
             $changesFile->putContent($changes);
 
+            $history["prev"] = $prevVersion;
             $historyName = self::getFileHistoryName($fileId, $version);
             $historyFile = $folderHistory->newFile($historyName);
             $historyFile->putContent(json_encode($history));
