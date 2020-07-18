@@ -109,7 +109,17 @@ class FileVersions {
             $historyData = json_decode($historyDataString, true);
 
             if ($historyData["prev"] !== $prevVersion) {
-                $logger->debug("History: prev $prevVersion != " . $historyData["prev"], ["app" => self::$appName]);
+                $logger->debug("getHistoryData: previous $prevVersion is changed", ["app" => self::$appName]);
+
+                $historyFile->delete();
+                $logger->debug("getHistoryData: remove $historyName", ["app" => self::$appName]);
+
+                $changesName = self::getFileChangesName($fileId, $versionId);
+                if ($folderHistory->fileExists($changesName)) {
+                    $changesFile = $folderHistory->getFile($changesName);
+                    $changesFile->delete();
+                    $logger->debug("getHistoryData: remove $changesName", ["app" => self::$appName]);
+                }
                 return null;
             }
 
