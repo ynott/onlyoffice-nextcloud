@@ -73,6 +73,23 @@ class FileVersions {
     }
 
     /**
+     * Split file path and version id
+     *
+     * @param string $pathVersion - version path
+     *
+     * @return array
+     */
+    public static function splitPathVersion($pathVersion) {
+        $pos = strrpos($pathVersion, ".v");
+        if ($pos === false) {
+            return false;
+        }
+        $filePath = substr($pathVersion, 0, $pos);
+        $versionId = substr($pathVersion, 2 + $pos - strlen($pathVersion));
+        return [$filePath, $versionId];
+    }
+
+    /**
      * Get changes from stored to history object
      *
      * @param string $ownerId - file owner id
@@ -283,6 +300,50 @@ class FileVersions {
 
                 $logger->debug("deleteAllVersions $storedFileName", ["app" => self::$appName]);
             }
+        }
+    }
+
+    /**
+     * Delete changes and history
+     *
+     * @param string $ownerId - file owner id
+     * @param string $fileId - file id
+     * @param string $versionId - file version
+    */
+    public static function deleteVersion($ownerId, $fileId, $versionId) {
+        $logger = \OC::$server->getLogger();
+
+        $logger->debug("deleteVersion $fileId ($versionId)", ["app" => self::$appName]);
+
+        if (empty($fileId) || empty($versionId)) {
+            return;
+        }
+        if ($ownerId === null) {
+            return;
+        }
+
+        $appData = \OC::$server->getAppDataDir(self::$appName);
+        $folderHistory = null;
+        try {
+            $folderHistory = $appData->getFolder($ownerId);
+        } catch (NotFoundException $e) {
+            return;
+        }
+
+        $historyName = FileVersions::getFileHistoryName($fileId, $versionId);
+        if ($folderHistory->fileExists($historyName)) {
+            $history = $folderHistory->getFile($historyName);
+            $history->delete();
+
+            $logger->debug("deleteVersion $historyName", ["app" => self::$appName]);
+        }
+
+        $changesName = FileVersions::getFileChangesName($fileId, $versionId);
+        if ($folderHistory->fileExists($changesName)) {
+            $changes = $folderHistory->getFile($changesName);
+            $changes->delete();
+
+            $logger->debug("deleteVersion $changesName", ["app" => self::$appName]);
         }
     }
 }
