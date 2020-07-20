@@ -274,12 +274,12 @@ class FileVersions {
      * @param string $ownerId - file owner id
      * @param string $fileId - file id
      */
-    public static function deleteAllVersions($ownerId, $fileId) {
+    public static function deleteAllVersions($ownerId, $fileId = null) {
         $logger = \OC::$server->getLogger();
 
         $logger->debug("deleteAllVersions $ownerId $fileId", ["app" => self::$appName]);
 
-        if ($ownerId === null || $fileId === null) {
+        if ($ownerId === null) {
             return;
         }
 
@@ -288,6 +288,12 @@ class FileVersions {
         try {
             $folderHistory = $appData->getFolder($ownerId);
         } catch (NotFoundException $e) {
+            return;
+        }
+
+        if ($fileId === null) {
+            $folderHistory->delete();
+
             return;
         }
 
